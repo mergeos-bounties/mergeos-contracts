@@ -1,0 +1,132 @@
+diff --git a/src/mt5_mcp/backend/mock.py b/src/mt5_mcp/backend/mock.py
+index 7aaca47..eb1f6ce 100644
+--- a/src/mt5_mcp/backend/mock.py
++++ b/src/mt5_mcp/backend/mock.py
+@@ -19,6 +19,7 @@ class MockBackend:
+         return self._ticket
+ 
+     def seed_demo(self) -> dict[str, Any]:
++        self._ticket = 200003
+         self._balance = 25_000.0
+         self._credit = 0.0
+         self._currency = "USD"
+@@ -81,6 +82,34 @@ class MockBackend:
+         self._positions: dict[int, dict[str, Any]] = {}
+         self._orders: dict[int, dict[str, Any]] = {}
+         self._deals: list[dict[str, Any]] = [
++            {
++                "ticket": 200003,
++                "position_id": 200003,
++                "symbol": "XAUUSD",
++                "side": "buy",
++                "volume": 0.10,
++                "price": 2320.10,
++                "commission": -0.35,
++                "swap": 0.0,
++                "profit": 18.5,
++                "entry": "out",
++                "time": time.time() - 1200,
++                "comment": "demo-gold",
++            },
++            {
++                "ticket": 200002,
++                "position_id": 200002,
++                "symbol": "GBPUSD",
++                "side": "sell",
++                "volume": 0.15,
++                "price": 1.26750,
++                "commission": -0.25,
++                "swap": -0.05,
++                "profit": 31.25,
++                "entry": "out",
++                "time": time.time() - 2400,
++                "comment": "demo-cable",
++            },
+             {
+                 "ticket": 200001,
+                 "position_id": 200001,
+@@ -88,6 +117,8 @@ class MockBackend:
+                 "side": "buy",
+                 "volume": 0.20,
+                 "price": 1.08100,
++                "commission": -0.30,
++                "swap": 0.0,
+                 "profit": 42.0,
+                 "entry": "out",
+                 "time": time.time() - 3600,
+@@ -112,6 +143,7 @@ class MockBackend:
+ 
+     def doctor(self) -> dict[str, Any]:
+         self._recalc()
++        symbol_names = sorted(self._symbols)
+         return {
+             "ok": True,
+             "mode": "mock",
+@@ -125,6 +157,8 @@ class MockBackend:
+             "positions": len(self._positions),
+             "pending_orders": len(self._orders),
+             "symbols": len(self._symbols),
++            "symbol_count": len(symbol_names),
++            "symbol_names": symbol_names,
+             "message": "Mock MT5 terminal — no MetaTrader install required",
+         }
+ 
+@@ -230,6 +264,8 @@ class MockBackend:
+                 "side": side_l,
+                 "volume": float(volume),
+                 "price": open_price,
++                "commission": 0.0,
++                "swap": 0.0,
+                 "profit": 0.0,
+                 "entry": "in",
+                 "time": time.time(),
+@@ -277,6 +313,8 @@ class MockBackend:
+             "side": "sell" if p["side"] == "buy" else "buy",
+             "volume": close_vol,
+             "price": close_price,
++            "commission": 0.0,
++            "swap": 0.0,
+             "profit": profit,
+             "entry": "out",
+             "time": time.time(),
+diff --git a/tests/test_cli_demo.py b/tests/test_cli_demo.py
+index 22db3b6..917a62d 100644
+--- a/tests/test_cli_demo.py
++++ b/tests/test_cli_demo.py
+@@ -17,6 +17,16 @@ def test_demo():
+     assert "demo complete" in r.stdout
+ 
+ 
++def test_doctor_shows_mode_and_symbols():
++    r = runner.invoke(app, ["doctor"])
++    assert r.exit_code == 0
++    assert "mode" in r.stdout
++    assert "mock" in r.stdout
++    assert "symbol_names" in r.stdout
++    assert "EURUSD" in r.stdout
++    assert "BTCUSD" in r.stdout
++
++
+ def test_tools_list():
+     r = runner.invoke(app, ["tools", "list"])
+     assert r.exit_code == 0
+diff --git a/tests/test_mock_backend.py b/tests/test_mock_backend.py
+index 4f8478c..1faec49 100644
+--- a/tests/test_mock_backend.py
++++ b/tests/test_mock_backend.py
+@@ -10,6 +10,15 @@ def test_seed_and_symbols():
+     assert any(s["symbol"] == "BTCUSD" for s in b.symbols())
+ 
+ 
++def test_doctor_includes_mock_symbol_inventory():
++    b = MockBackend()
++    doctor = b.doctor()
++    assert doctor["mode"] == "mock"
++    assert doctor["symbols"] == 5
++    assert doctor["symbol_count"] == 5
++    assert doctor["symbol_names"] == ["BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "XAUUSD"]
++
++
+ def test_position_roundtrip():
+     b = MockBackend()
+     b.seed_demo()
