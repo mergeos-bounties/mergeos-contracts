@@ -91,3 +91,66 @@ describe("mergeos-contracts package (Solana-first)", () => {
     }
   });
 });
+
+describe("mergeos-contracts escrow close/withdraw audit (Issue #2)", () => {
+  const CLOSE_WITHDRAW_INSTRUCTIONS = [
+    "close_escrow",
+    "withdraw_escrow",
+    "refund_escrow",
+    "cancel_escrow",
+  ];
+
+  it("documents that no close/withdraw/refund/cancel instruction exists in the program", () => {
+    for (const instruction of CLOSE_WITHDRAW_INSTRUCTIONS) {
+      const found = new RegExp(`pub fn ${instruction}\\(`).test(programSource);
+      assert.equal(
+        found,
+        false,
+        `MEDIUM finding (Issue #2): instruction '${instruction}' is MISSING — escrow funds can be permanently locked without a close/withdraw path. Expected: false (not yet implemented), got: ${found}`,
+      );
+    }
+  });
+
+  it("confirms the IDL lists no close/withdraw/refund/cancel instruction", () => {
+    const idlInstructionNames = idl.instructions.map((item) => item.name);
+    for (const idlName of [
+      "closeEscrow",
+      "withdrawEscrow",
+      "refundEscrow",
+      "cancelEscrow",
+    ]) {
+      assert.equal(
+        idlInstructionNames.includes(idlName),
+        false,
+        `MEDIUM finding (Issue #2): IDL instruction '${idlName}' is MISSING. Expected: false (not yet in IDL), got: true`,
+      );
+    }
+  });
+
+  it("validates that the escrow vault PDA has no close authority set", () => {
+    // Anchor close constraint: #[account(close = ...)] — verify none exists for escrow_vault
+    const closeDirective = /#\[account\s*\([^)]*close\s*=\s*\w+/s;
+    assert.equal(
+      closeDirective.test(programSource),
+      false,
+      "MEDIUM finding (Issue #2): No #[account(close = ...)] directive found on any escrow_vault account — funds cannot be recovered",
+    );
+  });
+
+  it("confirms existing instructions are intact (open_escrow and release_payout present)", () => {
+    assert.match(programSource, /pub fn open_escrow\(/);
+    assert.match(programSource, /pub fn release_payout\(/);
+    // Sanity: the 5 core instructions are unchanged
+    assert.deepEqual(
+      idl.instructions.map((item) => item.name),
+      [
+        "initializeTreasury",
+        "mintVerifiedMrg",
+        "openEscrow",
+        "releasePayout",
+        "registerLegacyWallet",
+      ],
+      "IDL instruction list must match the 5 known instructions — no extras, no removals",
+    );
+  });
+});
