@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, CloseAccount, Mint, MintTo, Token, TokenAccount, Transfer};
 
-declare_id!("4gUBWum3fGKfm7BeGXryzXjPDBDLfhVJRcjN5MPnfDNW");
+declare_id!("FrSanGwt8MjCqnfYRBiHFdtygqrL41uxTZin2AR71dRY");
 
 const MAX_SYMBOL_LEN: usize = 16;
 
@@ -13,19 +13,19 @@ pub mod mergeos_mrg {
         ctx: Context<InitializeTreasury>,
         token_symbol: String,
     ) -> Result<()> {
-        require!(!token_symbol.trim().is_empty(), MergeOSError::InvalidTokenSymbol);
-        require!(token_symbol.len() <= MAX_SYMBOL_LEN, MergeOSError::InvalidTokenSymbol);
+        require!(!token_symbol.trim().is_empty(), MergeOSError::InvalidTokenSymbol); // checks to see if its empty
+        require!(token_symbol.len() <= MAX_SYMBOL_LEN, MergeOSError::InvalidTokenSymbol); // checks to see if its less than the max
 
         let config = &mut ctx.accounts.treasury_config;
-        config.authority = ctx.accounts.authority.key();
-        config.token_mint = ctx.accounts.token_mint.key();
-        config.treasury_token_account = ctx.accounts.treasury_token_account.key();
-        config.token_symbol = token_symbol;
-        config.bump = ctx.bumps.treasury_config;
-        config.created_at = Clock::get()?.unix_timestamp;
-        config.minted_amount = 0;
-        config.escrowed_amount = 0;
-        config.released_amount = 0;
+        config.authority = ctx.accounts.authority.key(); // updates seem okay
+        config.token_mint = ctx.accounts.token_mint.key(); // updates seem okay
+        config.treasury_token_account = ctx.accounts.treasury_token_account.key(); // updates seem okay
+        config.token_symbol = token_symbol; // updates seem okay
+        config.bump = ctx.bumps.treasury_config; // updates seem okay
+        config.created_at = Clock::get()?.unix_timestamp; // updates seem okay
+        config.minted_amount = 0; // updates seem okay
+        config.escrowed_amount = 0; // updates seem okay
+        config.released_amount = 0; // updates seem okay
         Ok(())
     }
 
@@ -34,13 +34,15 @@ pub mod mergeos_mrg {
         ledger_reference: [u8; 32],
         amount: u64,
     ) -> Result<()> {
-        require!(amount > 0, MergeOSError::InvalidAmount);
+        require!(amount > 0, MergeOSError::InvalidAmount); // makes sense
+        // @audit-info can this be added as a anchor constraint on the MintVerifiedMRG account struct
         require_keys_eq!(
             ctx.accounts.treasury_config.authority,
             ctx.accounts.authority.key(),
             MergeOSError::Unauthorized
         );
 
+        // CPI seems okay (Token Program => MintTO ix to receiver_token_account)
         let signer_seeds: &[&[u8]] = &[b"treasury", &[ctx.accounts.treasury_config.bump]];
         token::mint_to(
             CpiContext::new_with_signer(
@@ -59,12 +61,12 @@ pub mod mergeos_mrg {
         config.minted_amount = config
             .minted_amount
             .checked_add(amount)
-            .ok_or(MergeOSError::MathOverflow)?;
+            .ok_or(MergeOSError::MathOverflow)?; // update correct
         emit!(MRGMinted {
             ledger_reference,
             amount,
             receiver: ctx.accounts.receiver_token_account.key(),
-        });
+        }); // event emitted correctly
         Ok(())
     }
 
@@ -74,7 +76,7 @@ pub mod mergeos_mrg {
         ledger_reference: [u8; 32],
         amount: u64,
     ) -> Result<()> {
-        require!(amount > 0, MergeOSError::InvalidAmount);
+        require!(amount > 0, MergeOSError::InvalidAmount); // this check is valid
 
         token::transfer(
             CpiContext::new(
@@ -86,7 +88,7 @@ pub mod mergeos_mrg {
                 },
             ),
             amount,
-        )?;
+        )?; // CPI is okay
 
         let escrow = &mut ctx.accounts.escrow_vault;
         escrow.project_id = project_id;
@@ -130,11 +132,11 @@ pub mod mergeos_mrg {
             ctx.accounts.treasury_config.authority,
             ctx.accounts.authority.key(),
             MergeOSError::Unauthorized
-        );
+        ); // check makes a lot of sense
         require!(
             ctx.accounts.escrow_vault.remaining_amount >= amount,
             MergeOSError::InsufficientEscrow
-        );
+        ); // makes sense
 
         let escrow = &mut ctx.accounts.escrow_vault;
         let signer_seeds: &[&[u8]] = &[b"escrow", escrow.project_id.as_ref(), &[escrow.bump]];
@@ -149,28 +151,34 @@ pub mod mergeos_mrg {
                 &[signer_seeds],
             ),
             amount,
-        )?;
+        )?; // makes sense
 
         escrow.remaining_amount = escrow
             .remaining_amount
             .checked_sub(amount)
-            .ok_or(MergeOSError::MathOverflow)?;
-        escrow.updated_at = Clock::get()?.unix_timestamp;
+            .ok_or(MergeOSError::MathOverflow)?; // makes sense
+        escrow.updated_at = Clock::get()?.unix_timestamp; // makes sense
 
         let receipt = &mut ctx.accounts.payout_receipt;
-        receipt.payout_id = payout_id;
-        receipt.project_id = escrow.project_id;
-        receipt.worker = ctx.accounts.worker.key();
-        receipt.worker_token_account = ctx.accounts.worker_token_account.key();
-        receipt.ledger_reference = ledger_reference;
-        receipt.amount = amount;
-        receipt.bump = ctx.bumps.payout_receipt;
-        receipt.released_at = Clock::get()?.unix_timestamp;
+        receipt.payout_id = payout_id; // makes sense
+        receipt.project_id = escrow.project_id; // makes sense
+        receipt.worker = ctx.accounts.worker.key(); // makes sense
+        receipt.worker_token_account = ctx.accounts.worker_token_account.key(); // makes sense
+        receipt.ledger_reference = ledger_reference; // makes sense
+        receipt.amount = amount; // makes sense
+        receipt.bump = ctx.bumps.payout_receipt; // makes sense
+        receipt.released_at = Clock::get()?.unix_timestamp; // makes sense
 
         let config = &mut ctx.accounts.treasury_config;
         config.released_amount = config
             .released_amount
             .checked_add(amount)
+            .ok_or(MergeOSError::MathOverflow)?; // makes sense
+
+        // FIX: keep escrowed_amount in sync with funds leaving escrow
+        config.escrowed_amount = config
+            .escrowed_amount
+            .checked_sub(amount)
             .ok_or(MergeOSError::MathOverflow)?;
         emit!(PayoutReleased {
             payout_id,
@@ -192,7 +200,7 @@ pub mod mergeos_mrg {
             solana_wallet,
             ctx.accounts.solana_wallet.key(),
             MergeOSError::WalletMismatch
-        );
+        ); // check has been made
 
         let migration = &mut ctx.accounts.wallet_migration;
         migration.legacy_chain = legacy_chain;
@@ -206,9 +214,48 @@ pub mod mergeos_mrg {
             legacy_address_hash,
             solana_wallet,
             owner: ctx.accounts.owner.key(),
-        });
+        }); // everything is correct
         Ok(())
     }
+}
+
+pub fn close_escrow(ctx: Context<CloseEscrow>) -> Result<()> {
+    // Both conditions as requested
+    require!(
+        ctx.accounts.escrow_vault.remaining_amount == 0,
+        MergeOSError::EscrowNotEmpty
+    );
+    require!(
+        ctx.accounts.treasury_config.escrowed_amount == 0,
+        MergeOSError::EscrowNotEmpty
+    );
+    // The real token balance must be zero too, or close_account will fail
+    require!(
+        ctx.accounts.escrow_token_account.amount == 0,
+        MergeOSError::EscrowNotEmpty
+    );
+
+    let project_id = ctx.accounts.escrow_vault.project_id;
+    let bump = ctx.accounts.escrow_vault.bump;
+    let signer_seeds: &[&[u8]] = &[b"escrow", project_id.as_ref(), &[bump]];
+
+    // Close the escrow token account, rent goes back to the funder
+    token::close_account(CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(),
+        CloseAccount {
+            account: ctx.accounts.escrow_token_account.to_account_info(),
+            destination: ctx.accounts.funder.to_account_info(),
+            authority: ctx.accounts.escrow_vault.to_account_info(),
+        },
+        &[signer_seeds],
+    ))?;
+
+    emit!(EscrowClosed {
+        project_id,
+        funder: ctx.accounts.funder.key(),
+    });
+    // escrow_vault itself is closed by the `close = funder` constraint
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -225,7 +272,7 @@ pub struct InitializeTreasury<'info> {
         seeds = [b"treasury"],
         bump
     )]
-    pub treasury_config: Account<'info, TreasuryConfig>,
+    pub treasury_config: Account<'info, TreasuryConfig>, // rent is paid by the authority pubkey
     pub system_program: Program<'info, System>,
 }
 
@@ -335,6 +382,34 @@ pub struct RegisterLegacyWallet<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct CloseEscrow<'info> {
+    pub authority: Signer<'info>,
+    #[account(
+        seeds = [b"treasury"],
+        bump = treasury_config.bump,
+        has_one = authority @ MergeOSError::Unauthorized
+    )]
+    pub treasury_config: Account<'info, TreasuryConfig>,
+    #[account(
+        mut,
+        seeds = [b"escrow", escrow_vault.project_id.as_ref()],
+        bump = escrow_vault.bump,
+        close = funder
+    )]
+    pub escrow_vault: Account<'info, EscrowVault>,
+    #[account(
+        mut,
+        address = escrow_vault.escrow_token_account,
+        constraint = escrow_token_account.owner == escrow_vault.key() @ MergeOSError::TokenAuthorityMismatch
+    )]
+    pub escrow_token_account: Account<'info, TokenAccount>,
+    /// CHECK: must be the original funder, receives the rent refunds
+    #[account(mut, address = escrow_vault.funder)]
+    pub funder: AccountInfo<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct TreasuryConfig {
@@ -435,6 +510,12 @@ pub struct LegacyWalletRegistered {
     pub owner: Pubkey,
 }
 
+#[event]
+pub struct EscrowClosed {
+    pub project_id: [u8; 32],
+    pub funder: Pubkey,
+}
+
 #[error_code]
 pub enum MergeOSError {
     #[msg("Amount must be greater than zero")]
@@ -453,4 +534,6 @@ pub enum MergeOSError {
     TokenAuthorityMismatch,
     #[msg("Arithmetic overflow")]
     MathOverflow,
+    #[msg("Escrow still holds funds and cannot be closed")]
+    EscrowNotEmpty,
 }

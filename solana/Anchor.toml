@@ -1,15 +1,15 @@
-[features]
-seeds = false
-skip-lint = false
+[toolchain]
+ anchor_version = "0.30.1"
 
-[programs.localnet]
-mergeos_mrg = "4gUBWum3fGKfm7BeGXryzXjPDBDLfhVJRcjN5MPnfDNW"
+[features]
+resolution = true
+skip-lint = false
 
 [programs.devnet]
 mergeos_mrg = "4gUBWum3fGKfm7BeGXryzXjPDBDLfhVJRcjN5MPnfDNW"
 
-[registry]
-url = "https://api.apr.dev"
+[programs.localnet]
+mergeos_mrg = "FrSanGwt8MjCqnfYRBiHFdtygqrL41uxTZin2AR71dRY"
 
 [provider]
 cluster = "localnet"
@@ -17,3 +17,5 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "node --test test/idl.test.js"
+
+[hooks]
